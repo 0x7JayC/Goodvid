@@ -82,13 +82,12 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('OpenRouter submit error:', err)
 
-      // Mark as failed in DB
       await supabase
         .from('generations')
         .update({ status: 'failed', error_message: String(err) })
         .eq('id', row.id)
 
-      return NextResponse.json({ error: 'Failed to submit to OpenRouter' }, { status: 502 })
+      return NextResponse.json({ error: String(err) }, { status: 502 })
     }
 
     // ── 4. Save task_id so client can poll ───────────────────────────────────
