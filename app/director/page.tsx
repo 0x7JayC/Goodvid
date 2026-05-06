@@ -86,8 +86,13 @@ export default function DirectorPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(apiData),
       })
+      if (!res.ok) {
+        const text = await res.text()
+        let msg = 'Director analysis failed'
+        try { msg = JSON.parse(text).error ?? msg } catch { msg = text || msg }
+        throw new Error(msg)
+      }
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Director analysis failed')
       shotSheet = json.shotSheet
     } catch (err) {
       setStage({ name: 'error', message: String(err) })
@@ -137,8 +142,13 @@ export default function DirectorPage() {
           aspectRatio: shotSheet.shots[0]?.aspect_ratio ?? '16:9',
         }),
       })
+      if (!res.ok) {
+        const text = await res.text()
+        let msg = 'Generation failed'
+        try { msg = JSON.parse(text).error ?? msg } catch { msg = text || msg }
+        throw new Error(msg)
+      }
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'Generation failed')
       const videoUrl = await pollVideoReady(data.taskId)
       setStage({ name: 'done', videoUrl, shotSheet })
     } catch (err) {

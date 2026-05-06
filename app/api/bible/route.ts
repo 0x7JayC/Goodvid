@@ -17,6 +17,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import type { BibleRequestBody, BibleResponseBody, ShotSheet } from '@/lib/types'
 
 export const maxDuration = 120
+export const bodyLimit = '20mb'
 
 function buildBiblePrompt(shotSheet: ShotSheet): string {
   const durBreakdown = shotSheet.shots.map((s) => `${s.duration}s`).join(' + ')

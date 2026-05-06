@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { DirectorRequestBody, DirectorResponseBody, ShotSheet } from '@/lib/types'
 
 export const maxDuration = 60
+export const bodyLimit = '20mb'
 
 const TARGET_SECONDS = 15
 
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
       ].filter(Boolean).join('\n'),
     })
 
-    const model = process.env.OPENROUTER_TEXT_MODEL ?? 'anthropic/claude-sonnet-4-5'
+    const model = process.env.OPENROUTER_VISION_MODEL ?? 'anthropic/claude-sonnet-4-5'
 
     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
