@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import type { DirectorRequestBody, DirectorResponseBody, ShotSheet } from '@/lib/types'
 
 export const maxDuration = 60
-export const bodyLimit = '20mb'
 
 const TARGET_SECONDS = 15
 

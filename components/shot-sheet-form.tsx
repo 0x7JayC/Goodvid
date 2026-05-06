@@ -25,22 +25,42 @@ interface ImageField {
   name: string
 }
 
+const MAX_IMAGE_PX = 1024
+
 function useImageField() {
   const [field, setField] = useState<ImageField | null>(null)
 
   const process = useCallback((file: File) => {
     if (!file.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const result = e.target?.result as string
-      setField({
-        base64: result.split(',')[1],
-        mime: file.type,
-        preview: URL.createObjectURL(file),
-        name: file.name,
-      })
+    const objectUrl = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      let { width, height } = img
+      if (width > MAX_IMAGE_PX || height > MAX_IMAGE_PX) {
+        if (width >= height) { height = Math.round(height * MAX_IMAGE_PX / width); width = MAX_IMAGE_PX }
+        else { width = Math.round(width * MAX_IMAGE_PX / height); height = MAX_IMAGE_PX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
+      canvas.toBlob((blob) => {
+        if (!blob) return
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const result = e.target?.result as string
+          setField({
+            base64: result.split(',')[1],
+            mime: 'image/jpeg',
+            preview: URL.createObjectURL(blob),
+            name: file.name,
+          })
+        }
+        reader.readAsDataURL(blob)
+      }, 'image/jpeg', 0.85)
     }
-    reader.readAsDataURL(file)
+    img.src = objectUrl
   }, [])
 
   return { field, process, clear: () => setField(null) }
