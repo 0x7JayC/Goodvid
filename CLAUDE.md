@@ -56,7 +56,8 @@ Models:
 - OPENROUTER_TEXT_MODEL    → text-only LLM for general tasks (moonshotai/kimi-k2.6)
 - OPENROUTER_VISION_MODEL  → vision LLM for scene assist (anthropic/claude-sonnet-4-5)
 - OPENROUTER_DIRECTOR_MODEL → fast vision LLM for director shot sheet (google/gemini-flash-1.5)
-- OPENROUTER_IMAGE_MODEL   → image gen for production bible (openai/gpt-5.4-image-2)
+- OPENROUTER_IMAGE_MODEL   → image gen for production bible (openai/dall-e-3)
+  Note: gpt-5.4-image-2 requires /images/edits with reference images — different API path
 - OPENROUTER_VIDEO_MODEL   → Seedance for 15s final video (bytedance/seedance-2.0)
 
 ## Naming Conventions

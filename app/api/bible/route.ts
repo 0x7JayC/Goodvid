@@ -95,7 +95,9 @@ Overall: The document should look exactly like a professional high-end film pre-
 }
 
 async function generateBibleImage(prompt: string): Promise<string> {
-  const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'openai/gpt-5.4-image-2'
+  // Default: openai/dall-e-3 — text-to-image, works via /images/generations
+  // gpt-5.4-image-2 requires reference images via /images/edits — different API
+  const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'openai/dall-e-3'
 
   const res = await fetch('https://openrouter.ai/api/v1/images/generations', {
     method: 'POST',
@@ -105,11 +107,13 @@ async function generateBibleImage(prompt: string): Promise<string> {
       'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
       'X-Title': 'Goodvid Production Bible',
     },
-    body: JSON.stringify({ model, prompt, n: 1 }),
+    body: JSON.stringify({ model, prompt, n: 1, size: '1792x1024' }),
   })
 
   if (!res.ok) {
-    const err = await res.text()
+    const text = await res.text()
+    // Strip HTML error pages down to a readable message
+    const err = text.startsWith('<') ? `HTTP ${res.status} from OpenRouter (check OPENROUTER_IMAGE_MODEL)` : text
     throw new Error(`Image gen failed (${res.status}): ${err}`)
   }
 
