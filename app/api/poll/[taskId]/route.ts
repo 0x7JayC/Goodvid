@@ -22,8 +22,9 @@ export async function GET(
     const supabase = createServiceClient()
 
     // ── If complete, download video from OpenRouter CDN → Supabase Storage ──
-    if (status === 'completed' && orResult.output?.url) {
-      const videoRes = await fetch(orResult.output.url)
+    const videoSourceUrl = orResult.unsigned_urls?.[0]
+    if (status === 'completed' && videoSourceUrl) {
+      const videoRes = await fetch(videoSourceUrl)
       if (!videoRes.ok) {
         throw new Error(`Failed to fetch generated video: ${videoRes.status}`)
       }

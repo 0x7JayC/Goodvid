@@ -40,10 +40,9 @@ export interface OpenRouterVideoTaskResponse {
 
 export interface OpenRouterVideoResultResponse {
   id: string
-  status: 'pending' | 'processing' | 'succeeded' | 'failed'
-  output?: {
-    url: string           // signed CDN URL to the generated video
-  }
+  status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  polling_url?: string
+  unsigned_urls?: string[]   // video URL(s) when completed
   error?: string
 }
 

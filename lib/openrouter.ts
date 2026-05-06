@@ -1,13 +1,13 @@
 /**
  * OpenRouter Video Generation API wrapper
  *
- * Seedance (bytedance/seedance-1-lite) is an async video model.
+ * Seedance is an async video model.
  * Flow:
- *   1. POST /api/v1/video/generations → returns { id, status: "pending" }
- *   2. GET  /api/v1/video/generations/{id} → poll until status = "succeeded"
+ *   1. POST /api/v1/videos → returns { id, status: "pending", polling_url }
+ *   2. GET  /api/v1/videos/{id} → poll until status = "completed"
+ *   3. Video URL is in unsigned_urls[0]
  *
  * Docs: https://openrouter.ai/docs/video
- * Note: If the endpoint path changes, update BASE_URL below.
  */
 
 import type {
@@ -42,12 +42,18 @@ export async function submitVideoJob(
   if (req.duration) body.duration = req.duration
   if (req.aspect_ratio) body.aspect_ratio = req.aspect_ratio
 
-  // For image-to-video: pass image as a URL or base64 data URI
+  // For image-to-video: pass image as frame_images array
   if (req.image) {
-    body.image = req.image
+    body.frame_images = [
+      {
+        type: 'image_url',
+        image_url: { url: req.image },
+        frame_type: 'first_frame',
+      },
+    ]
   }
 
-  const res = await fetch(`${BASE_URL}/video/generations`, {
+  const res = await fetch(`${BASE_URL}/videos`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(body),
@@ -68,7 +74,7 @@ export async function submitVideoJob(
 export async function pollVideoJob(
   taskId: string
 ): Promise<OpenRouterVideoResultResponse> {
-  const res = await fetch(`${BASE_URL}/video/generations/${taskId}`, {
+  const res = await fetch(`${BASE_URL}/videos/${taskId}`, {
     method: 'GET',
     headers: headers(),
   })
@@ -88,11 +94,11 @@ export function mapStatus(
   orStatus: OpenRouterVideoResultResponse['status']
 ): 'pending' | 'processing' | 'completed' | 'failed' {
   switch (orStatus) {
-    case 'succeeded':
+    case 'completed':
       return 'completed'
     case 'failed':
       return 'failed'
-    case 'processing':
+    case 'in_progress':
       return 'processing'
     default:
       return 'pending'
