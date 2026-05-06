@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { DirectorRequestBody, DirectorResponseBody, ShotSheet } from '@/lib/types'
 
-export const maxDuration = 120
+export const maxDuration = 55
 
 const TARGET_SECONDS = 15
 
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       ].filter(Boolean).join('\n'),
     })
 
-    const model = process.env.OPENROUTER_VISION_MODEL ?? 'anthropic/claude-sonnet-4-5'
+    const model = process.env.OPENROUTER_DIRECTOR_MODEL ?? 'google/gemini-flash-1.5'
 
     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: userContent },
         ],
         temperature: 0.7,
-        max_tokens: 3000,
+        max_tokens: 2000,
       }),
     })
 
