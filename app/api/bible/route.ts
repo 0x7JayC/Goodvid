@@ -94,44 +94,18 @@ Right side (two columns):
 Overall: The document should look exactly like a professional high-end film pre-production bible. Impeccable typography, clean grid layout, all text fully legible, warm editorial feel. Every frame in the storyboard section must show the CHARACTER from the reference image in the ENVIRONMENT from the reference image.`
 }
 
-async function generateBibleImage(
-  prompt: string,
-  charBase64: string | undefined,
-  charMime: string | undefined,
-  envBase64: string | undefined,
-  envMime: string | undefined
-): Promise<string> {
+async function generateBibleImage(prompt: string): Promise<string> {
   const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'openai/gpt-5.4-image-2'
-
-  const form = new FormData()
-  form.set('model', model)
-  form.set('prompt', prompt)
-  form.set('n', '1')
-  form.set('size', '1792x1024')
-  form.set('quality', 'high')
-
-  if (charBase64 && charMime) {
-    const buf = Buffer.from(charBase64, 'base64')
-    const blob = new Blob([buf], { type: charMime })
-    const ext = charMime.split('/')[1] ?? 'jpg'
-    form.append('image[]', blob, `character_reference.${ext}`)
-  }
-
-  if (envBase64 && envMime) {
-    const buf = Buffer.from(envBase64, 'base64')
-    const blob = new Blob([buf], { type: envMime })
-    const ext = envMime.split('/')[1] ?? 'jpg'
-    form.append('image[]', blob, `environment_reference.${ext}`)
-  }
 
   const res = await fetch('https://openrouter.ai/api/v1/images/generations', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
       'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
       'X-Title': 'Goodvid Production Bible',
     },
-    body: form,
+    body: JSON.stringify({ model, prompt, n: 1 }),
   })
 
   if (!res.ok) {
@@ -141,7 +115,7 @@ async function generateBibleImage(
 
   const data = await res.json()
   const item = data?.data?.[0]
-  if (!item) throw new Error('Empty response from GPT-5.4-image-2')
+  if (!item) throw new Error('Empty response from image model')
 
   if (item.b64_json) return `data:image/png;base64,${item.b64_json}`
   if (item.url) return item.url
@@ -193,13 +167,7 @@ export async function POST(req: NextRequest) {
     }
 
     const prompt = buildBiblePrompt(shotSheet)
-    const imageData = await generateBibleImage(
-      prompt,
-      character_image_base64,
-      character_image_mime,
-      environment_image_base64,
-      environment_image_mime
-    )
+    const imageData = await generateBibleImage(prompt)
 
     const supabase = createServiceClient()
     const fileName = `bible-${Date.now().toString(36)}-${shotSheet.shots.length}cuts.png`

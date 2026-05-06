@@ -18,7 +18,7 @@ interface RefImages {
 type Stage =
   | { name: 'form' }
   | { name: 'analyzing';   step: 'director' | 'bible' }
-  | { name: 'review';      shotSheet: ShotSheet; bibleImageUrl: string }
+  | { name: 'review';      shotSheet: ShotSheet; bibleImageUrl: string; bibleError?: string }
   | { name: 'generating';  shotSheet: ShotSheet }
   | { name: 'done';        videoUrl: string; shotSheet: ShotSheet }
   | { name: 'error';       message: string }
@@ -111,29 +111,29 @@ export default function DirectorPage() {
     setStage({ name: 'analyzing', step: 'bible' })
 
     let bibleImageUrl = ''
+    let bibleError = ''
     try {
       const res = await fetch('/api/bible', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shotSheet,
-          character_image_base64: data.character_image_base64,
-          character_image_mime: data.character_image_mime,
-          environment_image_base64: data.environment_image_base64,
-          environment_image_mime: data.environment_image_mime,
-        }),
+        body: JSON.stringify({ shotSheet }),
       })
-      const json = await res.json()
-      if (res.ok && json.bibleImageUrl) {
-        bibleImageUrl = json.bibleImageUrl
+      if (res.ok) {
+        const json = await res.json()
+        bibleImageUrl = json.bibleImageUrl ?? ''
       } else {
-        console.warn('Bible image gen failed (continuing without):', json.error)
+        const text = await res.text()
+        let msg = 'Bible image gen failed'
+        try { msg = JSON.parse(text).error ?? msg } catch { msg = text || msg }
+        bibleError = msg
+        console.warn('Bible image gen failed (non-fatal):', msg)
       }
     } catch (err) {
+      bibleError = String(err)
       console.warn('Bible gen error (non-fatal):', err)
     }
 
-    setStage({ name: 'review', shotSheet, bibleImageUrl })
+    setStage({ name: 'review', shotSheet, bibleImageUrl, bibleError })
   }
 
   // ── Step 2: Generate 15s Seedance film ─────────────────────────────────────
@@ -255,9 +255,11 @@ export default function DirectorPage() {
           /* Fallback: bible image gen failed — show minimal review with generate button */
           <div className="flex flex-col gap-4 rounded-2xl border border-zinc-800 p-6">
             <p className="text-sm text-zinc-400">
-              Production bible image could not be rendered (check OPENROUTER_IMAGE_MODEL).
-              Shot sheet is ready — you can still generate the film.
+              Production bible image could not be rendered. Shot sheet is ready — you can still generate the film.
             </p>
+            {stage.bibleError && (
+              <p className="text-xs text-red-400 font-mono break-all">{stage.bibleError}</p>
+            )}
             <p className="text-xs text-zinc-500">{stage.shotSheet.scene_synopsis}</p>
             <div className="flex gap-3">
               <button onClick={() => setStage({ name: 'form' })} className="px-4 py-2 rounded-xl border border-zinc-700 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">
