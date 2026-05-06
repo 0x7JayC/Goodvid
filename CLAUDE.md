@@ -72,6 +72,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 OPENROUTER_API_KEY=
 OPENROUTER_VIDEO_MODEL=bytedance/seedance-1-lite
 OPENROUTER_TEXT_MODEL=anthropic/claude-sonnet-4-5
+OPENROUTER_VISION_MODEL=anthropic/claude-sonnet-4-5
 OPENROUTER_IMAGE_MODEL=black-forest-labs/flux-1.1-pro
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```

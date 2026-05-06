@@ -105,7 +105,8 @@ export async function POST(req: NextRequest) {
       text: 'Analyze these references and suggest a compelling scene. Return only JSON.',
     })
 
-    const model = process.env.OPENROUTER_TEXT_MODEL ?? 'anthropic/claude-sonnet-4-5'
+    // Vision model needed — kimi-k2 is text-only, so use a dedicated vision model
+    const model = process.env.OPENROUTER_VISION_MODEL ?? 'anthropic/claude-sonnet-4-5'
 
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
