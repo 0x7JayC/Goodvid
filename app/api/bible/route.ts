@@ -95,7 +95,7 @@ Overall: The document should look exactly like a professional high-end film pre-
 }
 
 async function generateBibleImage(prompt: string): Promise<string> {
-  const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'black-forest-labs/flux-1.1-pro'
+  const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'openai/gpt-5.4-image-2'
 
   const res = await fetch('https://openrouter.ai/api/v1/images/generations', {
     method: 'POST',
