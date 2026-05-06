@@ -81,11 +81,19 @@ export default function DirectorPage() {
       const { _characterPreviewUrl, _environmentPreviewUrl, ...apiData } = data
       void _characterPreviewUrl; void _environmentPreviewUrl
 
-      const res = await fetch('/api/director', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(apiData),
-      })
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 90_000)
+      let res: Response
+      try {
+        res = await fetch('/api/director', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(apiData),
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
       if (!res.ok) {
         const text = await res.text()
         let msg = 'Director analysis failed'

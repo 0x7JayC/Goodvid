@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { DirectorRequestBody, DirectorResponseBody, ShotSheet } from '@/lib/types'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 const TARGET_SECONDS = 15
 
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: userContent },
         ],
         temperature: 0.7,
-        max_tokens: 5000,
+        max_tokens: 3000,
       }),
     })
 
