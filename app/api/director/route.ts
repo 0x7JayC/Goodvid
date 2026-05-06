@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
       ].filter(Boolean).join('\n'),
     })
 
-    const model = process.env.OPENROUTER_DIRECTOR_MODEL ?? 'google/gemini-flash-1.5'
+    const model = process.env.OPENROUTER_DIRECTOR_MODEL ?? 'openai/gpt-4o-mini'
 
     const orRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
