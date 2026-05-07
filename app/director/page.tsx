@@ -66,7 +66,14 @@ export default function DirectorPage() {
       const res = await fetch('/api/bible', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shotSheet }),
+        body: JSON.stringify({
+          shotSheet,
+          // Forward reference images so gpt-5.4-image-2 can use them in storyboard frames
+          character_image_base64: data.character_image_base64,
+          character_image_mime: data.character_image_mime,
+          environment_image_base64: data.environment_image_base64,
+          environment_image_mime: data.environment_image_mime,
+        }),
       })
       if (res.ok) {
         const json = await res.json()

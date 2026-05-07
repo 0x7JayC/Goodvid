@@ -94,21 +94,60 @@ Right side (two columns):
 Overall: The document should look exactly like a professional high-end film pre-production bible. Impeccable typography, clean grid layout, all text fully legible, warm editorial feel. Every frame in the storyboard section must show the CHARACTER from the reference image in the ENVIRONMENT from the reference image.`
 }
 
-async function generateBibleImage(prompt: string): Promise<string> {
-  // Default: openai/dall-e-3 — text-to-image, works via /images/generations
-  // gpt-5.4-image-2 requires reference images via /images/edits — different API
-  const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'openai/dall-e-3'
+async function generateBibleImage(
+  prompt: string,
+  charBase64?: string,
+  charMime?: string,
+  envBase64?: string,
+  envMime?: string,
+): Promise<string> {
+  const model = process.env.OPENROUTER_IMAGE_MODEL ?? 'openai/gpt-5.4-image-2'
 
-  const res = await fetch('https://openrouter.ai/api/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
-      'X-Title': 'Goodvid Production Bible',
-    },
-    body: JSON.stringify({ model, prompt, n: 1, size: '1792x1024' }),
-  })
+  // gpt-5.4-image-2 requires multipart FormData with reference images.
+  // Fallback models (flux, dall-e-3) accept JSON.
+  const useMultipart = charBase64 || envBase64
+
+  let res: Response
+
+  if (useMultipart) {
+    const form = new FormData()
+    form.set('model', model)
+    form.set('prompt', prompt)
+    form.set('n', '1')
+    form.set('size', '1792x1024')
+    form.set('quality', 'high')
+
+    if (charBase64 && charMime) {
+      const buf = Buffer.from(charBase64, 'base64')
+      form.append('image[]', new Blob([buf], { type: charMime }), `character.${charMime.split('/')[1] ?? 'jpg'}`)
+    }
+    if (envBase64 && envMime) {
+      const buf = Buffer.from(envBase64, 'base64')
+      form.append('image[]', new Blob([buf], { type: envMime }), `environment.${envMime.split('/')[1] ?? 'jpg'}`)
+    }
+
+    res = await fetch('https://openrouter.ai/api/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+        'X-Title': 'Goodvid Production Bible',
+        // No Content-Type — browser/Node sets multipart boundary automatically
+      },
+      body: form,
+    })
+  } else {
+    res = await fetch('https://openrouter.ai/api/v1/images/generations', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000',
+        'X-Title': 'Goodvid Production Bible',
+      },
+      body: JSON.stringify({ model, prompt, n: 1, size: '1792x1024', quality: 'high' }),
+    })
+  }
 
   if (!res.ok) {
     const text = await res.text()
@@ -171,11 +210,26 @@ export async function POST(req: NextRequest) {
     }
 
     const prompt = buildBiblePrompt(shotSheet)
-    const imageData = await generateBibleImage(prompt)
+
+    // Pass reference images so gpt-5.4-image-2 can render character + environment in storyboard frames
+    const imageData = await generateBibleImage(
+      prompt,
+      character_image_base64,
+      character_image_mime,
+      environment_image_base64,
+      environment_image_mime,
+    )
 
     const supabase = createServiceClient()
     const fileName = `bible-${Date.now().toString(36)}-${shotSheet.shots.length}cuts.png`
-    const bibleImageUrl = await storeBibleImage(supabase, imageData, fileName)
+
+    // Store in Supabase — non-fatal, fall back to raw data URL
+    let bibleImageUrl = imageData
+    try {
+      bibleImageUrl = await storeBibleImage(supabase, imageData, fileName)
+    } catch (storageErr) {
+      console.warn('Supabase storage failed — returning raw image data:', storageErr)
+    }
 
     return NextResponse.json({ bibleImageUrl } satisfies BibleResponseBody)
   } catch (err) {
