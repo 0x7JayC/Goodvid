@@ -19,69 +19,80 @@ export async function GET(
     const orResult = await pollVideoJob(taskId)
     const status = mapStatus(orResult.status)
 
-    const supabase = createServiceClient()
+    // ── Completed ─────────────────────────────────────────────────────────
+    if (status === 'completed') {
+      // Seedance returns the video URL in unsigned_urls[0]
+      const cdnUrl: string | undefined = orResult.unsigned_urls?.[0]
 
-    // ── If complete, download video from OpenRouter CDN → Supabase Storage ──
-    const videoSourceUrl = orResult.unsigned_urls?.[0]
-    if (status === 'completed' && videoSourceUrl) {
-      const videoRes = await fetch(videoSourceUrl)
-      if (!videoRes.ok) {
-        throw new Error(`Failed to fetch generated video: ${videoRes.status}`)
+      if (!cdnUrl) {
+        // Status says completed but no URL yet — keep polling
+        return NextResponse.json({ status: 'processing' } satisfies PollResponseBody)
       }
 
-      const buffer = Buffer.from(await videoRes.arrayBuffer())
-      const fileName = `${taskId}.mp4`
+      // Try to store in Supabase Storage — non-fatal, fall back to CDN URL
+      let finalVideoUrl = cdnUrl
 
-      const { error: uploadError } = await supabase.storage
-        .from('generated-videos')
-        .upload(fileName, buffer, { contentType: 'video/mp4', upsert: true })
+      try {
+        const supabase = createServiceClient()
+        const videoRes = await fetch(cdnUrl)
 
-      if (uploadError) {
-        console.error('Video storage upload error:', uploadError)
-        throw new Error('Failed to store generated video')
+        if (videoRes.ok) {
+          const buffer = Buffer.from(await videoRes.arrayBuffer())
+          const fileName = `${taskId}.mp4`
+
+          const { error: uploadError } = await supabase.storage
+            .from('generated-videos')
+            .upload(fileName, buffer, { contentType: 'video/mp4', upsert: true })
+
+          if (!uploadError) {
+            const { data: publicData } = supabase.storage
+              .from('generated-videos')
+              .getPublicUrl(fileName)
+            finalVideoUrl = publicData.publicUrl
+
+            // Update DB row — best effort
+            await supabase
+              .from('generations')
+              .update({
+                status: 'completed',
+                output_video_url: finalVideoUrl,
+                completed_at: new Date().toISOString(),
+              })
+              .eq('task_id', taskId)
+              .maybeSingle()
+          } else {
+            console.warn('Supabase storage upload failed — using CDN URL:', uploadError.message)
+          }
+        }
+      } catch (storageErr) {
+        console.warn('Storage step failed — using CDN URL directly:', storageErr)
       }
 
-      const { data: publicUrl } = supabase.storage
-        .from('generated-videos')
-        .getPublicUrl(fileName)
-
-      // Update DB row
-      await supabase
-        .from('generations')
-        .update({
-          status: 'completed',
-          output_video_url: publicUrl.publicUrl,
-          completed_at: new Date().toISOString(),
-        })
-        .eq('task_id', taskId)
-
-      const response: PollResponseBody = {
+      return NextResponse.json({
         status: 'completed',
-        videoUrl: publicUrl.publicUrl,
-      }
-      return NextResponse.json(response)
+        videoUrl: finalVideoUrl,
+      } satisfies PollResponseBody)
     }
 
-    // ── Failed ───────────────────────────────────────────────────────────────
+    // ── Failed ─────────────────────────────────────────────────────────────
     if (status === 'failed') {
-      await supabase
-        .from('generations')
-        .update({
-          status: 'failed',
-          error_message: orResult.error ?? 'Generation failed',
-        })
-        .eq('task_id', taskId)
+      try {
+        const supabase = createServiceClient()
+        await supabase
+          .from('generations')
+          .update({ status: 'failed', error_message: orResult.error ?? 'Generation failed' })
+          .eq('task_id', taskId)
+          .maybeSingle()
+      } catch { /* best effort */ }
 
-      const response: PollResponseBody = {
+      return NextResponse.json({
         status: 'failed',
         error: orResult.error ?? 'Generation failed',
-      }
-      return NextResponse.json(response)
+      } satisfies PollResponseBody)
     }
 
-    // ── Still running ────────────────────────────────────────────────────────
-    const response: PollResponseBody = { status }
-    return NextResponse.json(response)
+    // ── Still running ──────────────────────────────────────────────────────
+    return NextResponse.json({ status } satisfies PollResponseBody)
   } catch (err) {
     console.error('Poll error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

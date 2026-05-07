@@ -3,79 +3,29 @@
 import { useState } from 'react'
 import ShotSheetForm from '@/components/shot-sheet-form'
 import BibleViewer from '@/components/bible-viewer'
-import VideoResult from '@/components/video-result'
 import type { DirectorFormSubmission, ShotSheet } from '@/lib/types'
-
-interface RefImages {
-  charBase64?: string
-  charMime?: string
-  charPreview?: string
-  envBase64?: string
-  envMime?: string
-  envPreview?: string
-}
 
 type Stage =
   | { name: 'form' }
-  | { name: 'analyzing';   step: 'director' | 'bible' }
-  | { name: 'review';      shotSheet: ShotSheet; bibleImageUrl: string; bibleError?: string }
-  | { name: 'generating';  shotSheet: ShotSheet }
-  | { name: 'done';        videoUrl: string; shotSheet: ShotSheet }
-  | { name: 'error';       message: string }
+  | { name: 'analyzing';  step: 'director' | 'bible' }
+  | { name: 'review';     shotSheet: ShotSheet; bibleImageUrl: string; bibleError?: string }
+  | { name: 'error';      message: string }
 
-const STEP_LABELS = ['References', 'Bible', 'Film']
+const STEP_LABELS = ['References', 'Bible']
 
 function stepIndex(stage: Stage): number {
   if (stage.name === 'form' || stage.name === 'analyzing') return 0
-  if (stage.name === 'review') return 1
-  return 2
-}
-
-const POLL_INTERVAL = 3000
-const POLL_TIMEOUT = 5 * 60 * 1000
-
-async function pollVideoReady(taskId: string): Promise<string> {
-  const deadline = Date.now() + POLL_TIMEOUT
-  const tick = async (): Promise<string> => {
-    if (Date.now() > deadline) throw new Error('Timed out after 5 minutes')
-    const res = await fetch(`/api/poll/${taskId}`)
-    const data = await res.json()
-    if (data.status === 'completed' && data.videoUrl) return data.videoUrl
-    if (data.status === 'failed') throw new Error(data.error ?? 'Generation failed')
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL))
-    return tick()
-  }
-  return tick()
-}
-
-function compileMasterPrompt(shotSheet: ShotSheet): string {
-  const shots = shotSheet.shots.map((s) => s.seedance_prompt).join('. Then, ')
-  return [
-    shotSheet.scene_synopsis,
-    `${shotSheet.mood} atmosphere, ${shotSheet.color_palette} color palette.`,
-    `The sequence: ${shots}.`,
-    'Cinematic quality, seamless motion, 15 seconds.',
-  ].join(' ')
+  return 1
 }
 
 export default function DirectorPage() {
   const [stage, setStage] = useState<Stage>({ name: 'form' })
-  const [refs, setRefs] = useState<RefImages>({})
 
-  // ── Step 1: Director LLM → shot sheet ──────────────────────────────────────
   const handleAnalyze = async (data: DirectorFormSubmission) => {
-    setRefs({
-      charBase64: data.character_image_base64,
-      charMime: data.character_image_mime,
-      charPreview: data._characterPreviewUrl,
-      envBase64: data.environment_image_base64,
-      envMime: data.environment_image_mime,
-      envPreview: data._environmentPreviewUrl,
-    })
 
+    // ── Phase A: Director LLM → shot sheet ────────────────────────────────
     setStage({ name: 'analyzing', step: 'director' })
 
-    // Phase A — Shot sheet from director LLM
     let shotSheet: ShotSheet
     try {
       const { _characterPreviewUrl, _environmentPreviewUrl, ...apiData } = data
@@ -107,7 +57,7 @@ export default function DirectorPage() {
       return
     }
 
-    // Phase B — Generate full production bible image
+    // ── Phase B: Production bible image ───────────────────────────────────
     setStage({ name: 'analyzing', step: 'bible' })
 
     let bibleImageUrl = ''
@@ -126,42 +76,14 @@ export default function DirectorPage() {
         let msg = 'Bible image gen failed'
         try { msg = JSON.parse(text).error ?? msg } catch { msg = text || msg }
         bibleError = msg
-        console.warn('Bible image gen failed (non-fatal):', msg)
+        console.warn('Bible image gen failed:', msg)
       }
     } catch (err) {
       bibleError = String(err)
-      console.warn('Bible gen error (non-fatal):', err)
+      console.warn('Bible gen error:', err)
     }
 
     setStage({ name: 'review', shotSheet, bibleImageUrl, bibleError })
-  }
-
-  // ── Step 2: Generate 15s Seedance film ─────────────────────────────────────
-  const handleGenerate = async (shotSheet: ShotSheet) => {
-    setStage({ name: 'generating', shotSheet })
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'text-to-video',
-          prompt: compileMasterPrompt(shotSheet),
-          duration: 15,
-          aspectRatio: shotSheet.shots[0]?.aspect_ratio ?? '16:9',
-        }),
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        let msg = 'Generation failed'
-        try { msg = JSON.parse(text).error ?? msg } catch { msg = text || msg }
-        throw new Error(msg)
-      }
-      const data = await res.json()
-      const videoUrl = await pollVideoReady(data.taskId)
-      setStage({ name: 'done', videoUrl, shotSheet })
-    } catch (err) {
-      setStage({ name: 'error', message: String(err) })
-    }
   }
 
   const idx = stepIndex(stage)
@@ -182,14 +104,14 @@ export default function DirectorPage() {
             <span className="text-xs text-zinc-500 uppercase tracking-wider">Director</span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-50">
-            Reference → Production Bible → Film.
+            Reference → Production Bible.
           </h1>
         </div>
 
         {/* Step indicator */}
         <div className="flex items-center gap-0">
           {STEP_LABELS.map((label, i) => {
-            const done = i < idx
+            const done   = i < idx
             const active = i === idx
             return (
               <div key={label} className="flex items-center">
@@ -224,8 +146,7 @@ export default function DirectorPage() {
             <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-1">Pipeline</p>
             {[
               { step: '01', label: 'Director LLM', desc: 'Shot sheet, dialogue, voiceover, sound notes' },
-              { step: '02', label: 'Production Bible', desc: 'GPT-5.4-image-2 renders the full document' },
-              { step: '03', label: 'Seedance Film', desc: '15s video generated from your shot sheet' },
+              { step: '02', label: 'Production Bible', desc: 'GPT-5.4-image-2 renders the full storyboard document' },
             ].map(({ step, label, desc }) => (
               <div key={step} className="flex items-start gap-3">
                 <span className="text-[10px] font-mono text-zinc-700 mt-0.5">{step}</span>
@@ -248,49 +169,47 @@ export default function DirectorPage() {
           <BibleViewer
             bibleImageUrl={stage.bibleImageUrl}
             shotSheet={stage.shotSheet}
-            onGenerate={() => handleGenerate(stage.shotSheet)}
+            onGenerate={() => {/* video generation disabled for now */}}
             onReset={() => setStage({ name: 'form' })}
+            hideGenerateButton
           />
         ) : (
-          /* Fallback: bible image gen failed — show minimal review with generate button */
-          <div className="flex flex-col gap-4 rounded-2xl border border-zinc-800 p-6">
-            <p className="text-sm text-zinc-400">
-              Production bible image could not be rendered. Shot sheet is ready — you can still generate the film.
+          <div className="flex flex-col gap-4 rounded-2xl border border-zinc-800 p-6 max-w-xl">
+            <div className="flex items-start gap-3">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" className="shrink-0 mt-0.5">
+                <circle cx="9" cy="9" r="7.5" stroke="#ef4444" strokeWidth="1.3"/>
+                <path d="M9 5.5V9.5M9 12v.5" stroke="#ef4444" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              <div>
+                <p className="text-sm font-medium text-zinc-200">Bible image generation failed</p>
+                <p className="text-xs text-zinc-500 mt-1">Shot sheet was created successfully. The image render failed.</p>
+                {stage.bibleError && (
+                  <p className="text-xs text-red-400 font-mono mt-2 break-all">{stage.bibleError}</p>
+                )}
+              </div>
+            </div>
+            <p className="text-sm text-zinc-400 italic border-t border-zinc-800 pt-4">
+              {stage.shotSheet.scene_synopsis}
             </p>
-            {stage.bibleError && (
-              <p className="text-xs text-red-400 font-mono break-all">{stage.bibleError}</p>
-            )}
-            <p className="text-xs text-zinc-500">{stage.shotSheet.scene_synopsis}</p>
             <div className="flex gap-3">
-              <button onClick={() => setStage({ name: 'form' })} className="px-4 py-2 rounded-xl border border-zinc-700 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">
-                Re-direct
-              </button>
-              <button onClick={() => handleGenerate(stage.shotSheet)} className="px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-all">
-                Generate 15s Film Anyway
+              <button onClick={() => setStage({ name: 'form' })}
+                className="px-4 py-2 rounded-xl border border-zinc-700 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">
+                Try again
               </button>
             </div>
           </div>
         )
       )}
 
-      {/* ── Generating ── */}
-      {stage.name === 'generating' && <GeneratingState title={stage.shotSheet.scene_title} />}
-
-      {/* ── Done ── */}
-      {stage.name === 'done' && (
-        <VideoResult
-          videoUrl={stage.videoUrl}
-          shotSheet={stage.shotSheet}
-          onReset={() => setStage({ name: 'form' })}
-        />
-      )}
-
       {/* ── Error ── */}
       {stage.name === 'error' && (
         <div className="rounded-xl bg-red-500/5 border border-red-500/20 p-5 flex flex-col gap-4 max-w-xl">
           <p className="text-sm font-medium text-red-400">Something went wrong</p>
-          <p className="text-sm text-zinc-400">{stage.message}</p>
-          <button onClick={() => setStage({ name: 'form' })} className="self-start px-4 py-2 rounded-xl border border-zinc-700 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">
+          <p className="text-sm text-zinc-400 font-mono text-xs bg-zinc-900 rounded-lg p-3 leading-relaxed break-all">
+            {stage.message}
+          </p>
+          <button onClick={() => setStage({ name: 'form' })}
+            className="self-start px-4 py-2 rounded-xl border border-zinc-700 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">
             Start over
           </button>
         </div>
@@ -301,52 +220,33 @@ export default function DirectorPage() {
 
 function AnalyzingState({ step }: { step: 'director' | 'bible' }) {
   const isDirector = step === 'director'
+  const label = isDirector ? 'Directing your scene...' : 'Rendering production bible...'
+  const sub = isDirector
+    ? 'Vision LLM is reading references and writing the shot sheet'
+    : 'GPT-5.4-image-2 is composing the full storyboard document'
+  const lines = isDirector
+    ? ['Reading reference images...', 'Planning shot coverage...', 'Writing dialogue + voiceover...', 'Finalising Seedance prompts...']
+    : ['Rendering character section...', 'Drawing floor plan...', 'Rendering storyboard frames...', 'Composing lighting notes...']
+
   return (
-    <div className="flex flex-col items-center justify-center gap-6 py-28">
+    <div className="flex flex-col items-center justify-center gap-6 py-24">
       <div className="relative w-14 h-14">
         <div className="absolute inset-0 rounded-full border-2 border-zinc-800"/>
         <div className="absolute inset-0 rounded-full border-2 border-t-blue-500 animate-spin"/>
       </div>
       <div className="text-center max-w-sm">
-        <p className="text-sm font-medium text-zinc-200">
-          {isDirector ? 'Directing your scene...' : 'Rendering production bible...'}
-        </p>
-        <p className="text-xs text-zinc-500 mt-1">
-          {isDirector
-            ? 'Analyzing references, writing shot sheet, dialogue, and voiceover'
-            : 'GPT-5.4-image-2 is rendering all 4 sections — character, environment, storyboard, lighting'}
-        </p>
-        {!isDirector && (
-          <p className="text-xs text-zinc-600 mt-2">This takes 30–60 seconds for the full document.</p>
-        )}
+        <p className="text-sm font-medium text-zinc-200">{label}</p>
+        <p className="text-xs text-zinc-500 mt-1">{sub}</p>
+        {!isDirector && <p className="text-xs text-zinc-600 mt-2">This takes 30–60 seconds for the full document.</p>}
       </div>
       <div className="flex flex-col gap-2 w-72">
-        {(isDirector
-          ? ['Reading references...', 'Planning shots...', 'Writing dialogue...', 'Finalising prompts...']
-          : ['Rendering character section...', 'Drawing floor plan...', 'Rendering storyboard frames...', 'Composing lighting notes...']
-        ).map((line, i) => (
+        {lines.map((line, i) => (
           <div key={line} className="flex items-center gap-2.5 animate-fade-in"
             style={{ animationDelay: `${i * 700}ms`, animationFillMode: 'both', opacity: 0 }}>
             <div className="w-1 h-1 rounded-full bg-blue-400 flex-shrink-0"/>
             <p className="text-xs text-zinc-500">{line}</p>
           </div>
         ))}
-      </div>
-    </div>
-  )
-}
-
-function GeneratingState({ title }: { title: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center gap-5 py-28">
-      <div className="relative w-14 h-14">
-        <div className="absolute inset-0 rounded-full border-2 border-zinc-800"/>
-        <div className="absolute inset-0 rounded-full border-2 border-t-blue-500 animate-spin"/>
-      </div>
-      <div className="text-center">
-        <p className="text-sm font-medium text-zinc-200">Generating your 15-second film...</p>
-        <p className="text-xs text-zinc-500 mt-1">Seedance is rendering &quot;{title}&quot;</p>
-        <p className="text-xs text-zinc-600 mt-2">Usually takes 60–120 seconds.</p>
       </div>
     </div>
   )

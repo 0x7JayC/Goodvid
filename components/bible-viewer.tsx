@@ -8,6 +8,7 @@ interface BibleViewerProps {
   shotSheet: ShotSheet
   onGenerate: () => void
   onReset: () => void
+  hideGenerateButton?: boolean
 }
 
 export default function BibleViewer({
@@ -15,6 +16,7 @@ export default function BibleViewer({
   shotSheet,
   onGenerate,
   onReset,
+  hideGenerateButton = false,
 }: BibleViewerProps) {
   const totalSeconds = shotSheet.shots.reduce((n, s) => n + s.duration, 0)
 
@@ -45,15 +47,17 @@ export default function BibleViewer({
             </svg>
             Download Bible
           </a>
-          <button
-            onClick={onGenerate}
-            className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-all active:scale-[0.98]"
-          >
-            <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
-              <path d="M2 2l7 3.5L2 9V2z"/>
-            </svg>
-            Generate {totalSeconds}s Film
-          </button>
+          {!hideGenerateButton && (
+            <button
+              onClick={onGenerate}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-all active:scale-[0.98]"
+            >
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="currentColor">
+                <path d="M2 2l7 3.5L2 9V2z"/>
+              </svg>
+              Generate {totalSeconds}s Film
+            </button>
+          )}
         </div>
       </div>
 
@@ -93,18 +97,20 @@ export default function BibleViewer({
         </div>
       </div>
 
-      {/* Bottom CTA */}
-      <div className="flex justify-end">
-        <button
-          onClick={onGenerate}
-          className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-all active:scale-[0.98]"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
-            <path d="M2 2l8 4-8 4V2z"/>
-          </svg>
-          Generate {totalSeconds}s Film with Seedance
-        </button>
-      </div>
+      {/* Bottom CTA — hidden when video generation is disabled */}
+      {!hideGenerateButton && (
+        <div className="flex justify-end">
+          <button
+            onClick={onGenerate}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-blue-500 hover:bg-blue-400 text-white text-sm font-semibold transition-all active:scale-[0.98]"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+              <path d="M2 2l8 4-8 4V2z"/>
+            </svg>
+            Generate {totalSeconds}s Film with Seedance
+          </button>
+        </div>
+      )}
     </div>
   )
 }
